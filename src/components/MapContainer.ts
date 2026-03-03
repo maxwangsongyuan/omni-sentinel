@@ -611,6 +611,7 @@ export class MapContainer {
   }
 
   public fitCountry(code: string): void {
+    if (this.useGlobe) { this.globeMap?.fitCountry(code); return; }
     if (this.useDeckGL) {
       this.deckGLMap?.fitCountry(code);
     } else {

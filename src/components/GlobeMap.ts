@@ -88,7 +88,7 @@ export class GlobeMap {
   private timeRange: TimeRange;
   private currentView: MapView = 'global';
 
-  // Callbacks
+  // Click callbacks
   private onHotspotClickCb: ((h: Hotspot) => void) | null = null;
 
   // Auto-rotate timer (like Sentinel: resume after 60 s idle)
@@ -96,6 +96,13 @@ export class GlobeMap {
 
   // ResizeObserver keeps the canvas in sync with the container
   private resizeObserver: ResizeObserver | null = null;
+
+  // Overlay UI elements
+  private layerTogglesEl: HTMLElement | null = null;
+  private tooltipEl: HTMLElement | null = null;
+
+  // Callbacks
+  private onLayerChangeCb: ((layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic') => void) | null = null;
 
   constructor(container: HTMLElement, initialState: MapContainerState) {
     this.container = container;
@@ -225,6 +232,10 @@ export class GlobeMap {
     this.globe = globe;
     this.initialized = true;
 
+    // Add overlay UI (zoom controls + layer panel)
+    this.createControls();
+    this.createLayerToggles();
+
     // Load static datasets
     this.setHotspots(INTEL_HOTSPOTS);
     this.setConflictZones();
@@ -311,13 +322,13 @@ export class GlobeMap {
 
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.handleMarkerClick(d);
+      this.handleMarkerClick(d, el);
     });
 
     return el;
   }
 
-  private handleMarkerClick(d: GlobeMarker): void {
+  private handleMarkerClick(d: GlobeMarker, anchor: HTMLElement): void {
     if (d._kind === 'hotspot' && this.onHotspotClickCb) {
       this.onHotspotClickCb({
         id: d.id,
@@ -328,6 +339,160 @@ export class GlobeMap {
         escalationScore: d.escalationScore as Hotspot['escalationScore'],
       });
     }
+    this.showMarkerTooltip(d, anchor);
+  }
+
+  private showMarkerTooltip(d: GlobeMarker, anchor: HTMLElement): void {
+    this.hideTooltip();
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position:absolute',
+      'background:rgba(10,12,16,0.95)',
+      'border:1px solid rgba(60,120,60,0.6)',
+      'padding:8px 12px',
+      'border-radius:3px',
+      'font-size:11px',
+      'font-family:monospace',
+      'color:#d4d4d4',
+      'max-width:240px',
+      'z-index:1000',
+      'pointer-events:none',
+      'line-height:1.5',
+    ].join(';');
+
+    let html = '';
+    if (d._kind === 'conflict') {
+      html = `<span style="color:#ff5050;font-weight:bold;">⚔ ${d.location}</span>` +
+             (d.fatalities ? `<br><span style="opacity:.7;">Casualties: ${d.fatalities}</span>` : '');
+    } else if (d._kind === 'hotspot') {
+      const sc = ['', '#88ff44', '#ffdd00', '#ffaa00', '#ff6600', '#ff2020'][d.escalationScore] ?? '#ffaa00';
+      html = `<span style="color:${sc};font-weight:bold;">🎯 ${d.name}</span>` +
+             `<br><span style="opacity:.7;">Escalation: ${d.escalationScore}/5</span>`;
+    } else if (d._kind === 'flight') {
+      html = `<span style="font-weight:bold;">✈ ${d.callsign}</span><br><span style="opacity:.7;">${d.type}</span>`;
+    } else if (d._kind === 'vessel') {
+      html = `<span style="font-weight:bold;">⛴ ${d.name}</span><br><span style="opacity:.7;">${d.type}</span>`;
+    } else if (d._kind === 'weather') {
+      const wc = d.severity === 'Extreme' ? '#ff0044' : d.severity === 'Severe' ? '#ff6600' : '#88aaff';
+      html = `<span style="color:${wc};font-weight:bold;">⚡ ${d.severity}</span>` +
+             `<br><span style="opacity:.7;white-space:normal;display:block;">${d.headline.slice(0, 90)}</span>`;
+    } else if (d._kind === 'natural') {
+      html = `<span style="font-weight:bold;">${d.title.slice(0, 60)}</span>` +
+             `<br><span style="opacity:.7;">${d.category}</span>`;
+    }
+    el.innerHTML = html;
+
+    // Position relative to container
+    const ar = anchor.getBoundingClientRect();
+    const cr = this.container.getBoundingClientRect();
+    let left = ar.left - cr.left + (anchor.offsetWidth ?? 14) + 6;
+    let top  = ar.top  - cr.top  - 8;
+    left = Math.max(4, Math.min(left, cr.width  - 248));
+    top  = Math.max(4, Math.min(top,  cr.height - 80));
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+
+    this.container.appendChild(el);
+    this.tooltipEl = el;
+    setTimeout(() => this.hideTooltip(), 3500);
+  }
+
+  private hideTooltip(): void {
+    this.tooltipEl?.remove();
+    this.tooltipEl = null;
+  }
+
+  // ─── Overlay UI: zoom controls & layer panel ─────────────────────────────
+
+  private createControls(): void {
+    const el = document.createElement('div');
+    el.className = 'map-controls deckgl-controls';
+    el.innerHTML = `
+      <div class="zoom-controls">
+        <button class="map-btn zoom-in"    title="Zoom in">+</button>
+        <button class="map-btn zoom-out"   title="Zoom out">-</button>
+        <button class="map-btn zoom-reset" title="Reset view">&#8962;</button>
+      </div>`;
+    this.container.appendChild(el);
+    el.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if      (target.classList.contains('zoom-in'))    this.zoomInGlobe();
+      else if (target.classList.contains('zoom-out'))   this.zoomOutGlobe();
+      else if (target.classList.contains('zoom-reset')) this.setView(this.currentView);
+    });
+  }
+
+  private zoomInGlobe(): void {
+    if (!this.globe) return;
+    const pov = this.globe.pointOfView();
+    if (!pov) return;
+    const alt = Math.max(0.05, (pov.altitude ?? 1.8) * 0.6);
+    this.globe.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: alt }, 500);
+  }
+
+  private zoomOutGlobe(): void {
+    if (!this.globe) return;
+    const pov = this.globe.pointOfView();
+    if (!pov) return;
+    const alt = Math.min(4.0, (pov.altitude ?? 1.8) * 1.6);
+    this.globe.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: alt }, 500);
+  }
+
+  private createLayerToggles(): void {
+    const layers: Array<{ key: keyof MapLayers; label: string; icon: string }> = [
+      { key: 'hotspots',  label: 'Intel Hotspots',   icon: '&#127919;' },
+      { key: 'conflicts', label: 'Conflict Zones',    icon: '&#9876;'   },
+      { key: 'military',  label: 'Military Activity', icon: '&#9992;'   },
+      { key: 'weather',   label: 'Weather Alerts',    icon: '&#9928;'   },
+      { key: 'natural',   label: 'Natural Events',    icon: '&#127755;' },
+    ];
+
+    const el = document.createElement('div');
+    el.className = 'layer-toggles deckgl-layer-toggles';
+    el.innerHTML = `
+      <div class="toggle-header">
+        <span>LAYERS</span>
+        <button class="toggle-collapse">&#9660;</button>
+      </div>
+      <div class="toggle-list" style="max-height:32vh;overflow-y:auto;scrollbar-width:thin;">
+        ${layers.map(({ key, label, icon }) => `
+          <label class="layer-toggle" data-layer="${key}">
+            <input type="checkbox" ${this.layers[key] ? 'checked' : ''}>
+            <span class="toggle-icon">${icon}</span>
+            <span class="toggle-label">${label}</span>
+          </label>`).join('')}
+      </div>`;
+    this.container.appendChild(el);
+
+    el.querySelectorAll('.layer-toggle input').forEach(input => {
+      input.addEventListener('change', () => {
+        const layer = (input as HTMLInputElement).closest('.layer-toggle')?.getAttribute('data-layer') as keyof MapLayers;
+        if (layer) {
+          const checked = (input as HTMLInputElement).checked;
+          (this.layers as any)[layer] = checked;
+          this.flushMarkers();
+          this.onLayerChangeCb?.(layer, checked, 'user');
+        }
+      });
+    });
+
+    const collapseBtn = el.querySelector('.toggle-collapse');
+    const list = el.querySelector('.toggle-list') as HTMLElement | null;
+    let collapsed = false;
+    collapseBtn?.addEventListener('click', () => {
+      collapsed = !collapsed;
+      if (list) list.style.display = collapsed ? 'none' : '';
+      if (collapseBtn) (collapseBtn as HTMLElement).innerHTML = collapsed ? '&#9654;' : '&#9660;';
+    });
+
+    // Intercept wheel on layer panel — scroll list, don't zoom globe
+    el.addEventListener('wheel', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (list) list.scrollTop += e.deltaY;
+    }, { passive: false });
+
+    this.layerTogglesEl = el;
   }
 
   // ─── Flush all current data to globe ──────────────────────────────────────
@@ -535,11 +700,19 @@ export class GlobeMap {
   public setHotspotLevels(_l: Record<string, string>): void {}
   public initEscalationGetters(): void {}
   public highlightAssets(_assets: any): void {}
-  public setOnLayerChange(_cb: any): void {}
+  public setOnLayerChange(cb: (layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic') => void): void {
+    this.onLayerChangeCb = cb;
+  }
   public setOnTimeRangeChange(_cb: any): void {}
-  public hideLayerToggle(_layer: keyof MapLayers): void {}
-  public setLayerLoading(_layer: keyof MapLayers, _loading: boolean): void {}
-  public setLayerReady(_layer: keyof MapLayers, _hasData: boolean): void {}
+  public hideLayerToggle(layer: keyof MapLayers): void {
+    this.layerTogglesEl?.querySelector(`.layer-toggle[data-layer="${layer}"]`)?.remove();
+  }
+  public setLayerLoading(layer: keyof MapLayers, loading: boolean): void {
+    this.layerTogglesEl?.querySelector(`.layer-toggle[data-layer="${layer}"]`)?.classList.toggle('loading', loading);
+  }
+  public setLayerReady(layer: keyof MapLayers, hasData: boolean): void {
+    this.layerTogglesEl?.querySelector(`.layer-toggle[data-layer="${layer}"]`)?.classList.toggle('no-data', !hasData);
+  }
   public flashAssets(_type: string, _ids: string[]): void {}
   public flashLocation(_lat: number, _lon: number, _ms?: number): void {}
   public triggerHotspotClick(_id: string): void {}
@@ -598,6 +771,8 @@ export class GlobeMap {
     if (this.autoRotateTimer) clearTimeout(this.autoRotateTimer);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.hideTooltip();
+    this.layerTogglesEl = null;
     if (this.globe) {
       try { this.globe._destructor(); } catch { /* ignore */ }
       this.globe = null;

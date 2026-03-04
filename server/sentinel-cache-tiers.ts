@@ -16,4 +16,6 @@ export const SENTINEL_CACHE_TIERS: Record<string, string> = {
   '/api/analyst/v1/get-prediction': 'slow',
   '/api/kalshi/v1/list-kalshi-markets': 'medium',
   '/api/metaculus/v1/list-metaculus-questions': 'medium',
+  '/api/intel/v1/chat': 'no-store',
+  '/api/intel/v1/briefing': 'slow',
 };

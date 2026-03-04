@@ -8,7 +8,7 @@ export function extractJson<T>(text: string): T {
   const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (fenceMatch) {
     try {
-      return JSON.parse(fenceMatch[1].trim()) as T;
+      return JSON.parse(fenceMatch[1]!.trim()) as T;
     } catch { /* continue */ }
   }
 
@@ -16,7 +16,7 @@ export function extractJson<T>(text: string): T {
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (jsonMatch) {
     try {
-      return JSON.parse(jsonMatch[1]) as T;
+      return JSON.parse(jsonMatch[1]!) as T;
     } catch { /* fall through */ }
   }
 

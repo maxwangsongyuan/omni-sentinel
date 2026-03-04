@@ -1,7 +1,7 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
 // SENTINEL: import Sentinel feature definitions
-import { SENTINEL_FEATURES, SENTINEL_DEFAULT_TOGGLES } from '../config/sentinel-features';
+import { SENTINEL_FEATURES } from '../config/sentinel-features';
 
 export type RuntimeSecretKey =
   | 'GROQ_API_KEY'
@@ -123,7 +123,18 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   newsPerFeedFallback: false,
   aviationStack: true,
   icaoNotams: true,
-  ...SENTINEL_DEFAULT_TOGGLES,  // SENTINEL
+  // SENTINEL: Sentinel default toggles
+  aiClaude: true,
+  socialReddit: true,
+  socialTwitter: true,
+  socialBluesky: true,
+  socialYouTube: true,
+  socialTikTok: false,
+  socialVK: false,
+  govdataNotam: true,
+  trajectoryFlight: true,
+  predictionKalshi: true,
+  predictionMetaculus: true,  // SENTINEL: end
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [

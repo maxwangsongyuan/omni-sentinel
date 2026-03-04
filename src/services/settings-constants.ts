@@ -58,6 +58,16 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   WTO_API_KEY: 'WTO API Key',
   AVIATIONSTACK_API: 'AviationStack API Key',
   ICAO_API_KEY: 'ICAO NOTAM API Key',
+  // SENTINEL: Sentinel secret labels
+  CLAUDE_API_KEY: 'Claude API Key',
+  REDDIT_CLIENT_ID: 'Reddit Client ID',
+  REDDIT_CLIENT_SECRET: 'Reddit Client Secret',
+  TWITTER_API_IO_KEY: 'TwitterAPI.io Key',
+  TWITTER_BEARER_TOKEN: 'X/Twitter Bearer Token',
+  YOUTUBE_API_KEY: 'YouTube API Key',
+  FAA_API_KEY: 'FAA NOTAM API Key',
+  TIKTOK_APIFY_TOKEN: 'Apify TikTok Token',
+  VK_SERVICE_TOKEN: 'VK Service Token',  // SENTINEL: end
 };
 
 export interface SettingsCategory {

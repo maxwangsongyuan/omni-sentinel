@@ -72,7 +72,8 @@ export type RuntimeFeatureId =
   | 'govdataNotam'
   | 'trajectoryFlight'
   | 'predictionKalshi'
-  | 'predictionMetaculus';  // SENTINEL: end
+  | 'predictionMetaculus'
+  | 'intelChat';  // SENTINEL: end
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -134,7 +135,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   govdataNotam: true,
   trajectoryFlight: true,
   predictionKalshi: true,
-  predictionMetaculus: true,  // SENTINEL: end
+  predictionMetaculus: true,
+  intelChat: true,  // SENTINEL: end
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [

@@ -47,6 +47,20 @@
       "error": "Failed to load flight history",
       "empty": "No trajectory data available"
     },
+    "intel": {
+      "title": "Intelligence Chat",
+      "placeholder": "Ask about geopolitics, markets, safety...",
+      "send": "Send",
+      "briefing": "Generate Briefing",
+      "generating": "Analyzing...",
+      "error": "Failed to get response. Check your Claude API key.",
+      "welcome": "Hello! I'm your Omni Sentinel intelligence analyst. Ask me about current geopolitical events, financial markets, or travel safety.",
+      "disclaimer": "AI-generated analysis based on public data. Not a sole basis for decisions.",
+      "toolsUsed": "Sources",
+      "briefingTitle": "Intelligence Briefing",
+      "briefingGenerating": "Generating briefing...",
+      "briefingEmpty": "No briefing data available"
+    },
     "prediction": {
       "kalshi": "Kalshi Markets",
       "metaculus": "Metaculus Forecasts",

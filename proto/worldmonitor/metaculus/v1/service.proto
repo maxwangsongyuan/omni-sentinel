@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package worldmonitor.metaculus.v1;
+
+import "sebuf/http/annotations.proto";
+import "worldmonitor/metaculus/v1/question.proto";
+import "worldmonitor/core/v1/pagination.proto";
+
+// MetaculusService provides APIs for forecasting question data from Metaculus.
+service MetaculusService {
+  option (sebuf.http.service_config) = {base_path: "/api/metaculus/v1"};
+
+  // ListMetaculusQuestions retrieves active forecasting questions from Metaculus,
+  // filtered for geopolitical topics.
+  rpc ListMetaculusQuestions(ListMetaculusQuestionsRequest) returns (ListMetaculusQuestionsResponse) {
+    option (sebuf.http.config) = {path: "/list-metaculus-questions", method: HTTP_METHOD_GET};
+  }
+}
+
+// ListMetaculusQuestionsRequest specifies filters for retrieving Metaculus questions.
+message ListMetaculusQuestionsRequest {
+  // Maximum items per page (1-100).
+  int32 page_size = 1 [(sebuf.http.query) = { name: "page_size" }];
+  // Cursor/offset for next page.
+  string cursor = 2 [(sebuf.http.query) = { name: "cursor" }];
+  // Optional category filter (e.g., "geopolitics").
+  string category = 3 [(sebuf.http.query) = { name: "category" }];
+  // Optional search query for question titles.
+  string query = 4 [(sebuf.http.query) = { name: "query" }];
+}
+
+// ListMetaculusQuestionsResponse contains Metaculus questions matching the request.
+message ListMetaculusQuestionsResponse {
+  // The list of Metaculus questions.
+  repeated MetaculusQuestion questions = 1;
+  // Pagination metadata.
+  worldmonitor.core.v1.PaginationResponse pagination = 2;
+}

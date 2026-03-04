@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package worldmonitor.kalshi.v1;
+
+import "sebuf/http/annotations.proto";
+import "worldmonitor/kalshi/v1/market.proto";
+import "worldmonitor/core/v1/pagination.proto";
+
+// KalshiService provides APIs for prediction market data from Kalshi.
+service KalshiService {
+  option (sebuf.http.service_config) = {base_path: "/api/kalshi/v1"};
+
+  // ListKalshiMarkets retrieves active prediction markets from Kalshi,
+  // filtered for geopolitical/conflict topics.
+  rpc ListKalshiMarkets(ListKalshiMarketsRequest) returns (ListKalshiMarketsResponse) {
+    option (sebuf.http.config) = {path: "/list-kalshi-markets", method: HTTP_METHOD_GET};
+  }
+}
+
+// ListKalshiMarketsRequest specifies filters for retrieving Kalshi markets.
+message ListKalshiMarketsRequest {
+  // Maximum items per page (1-100).
+  int32 page_size = 1 [(sebuf.http.query) = { name: "page_size" }];
+  // Cursor for next page.
+  string cursor = 2 [(sebuf.http.query) = { name: "cursor" }];
+  // Optional category filter (e.g., "Politics", "Economics").
+  string category = 3 [(sebuf.http.query) = { name: "category" }];
+  // Optional search query for market titles.
+  string query = 4 [(sebuf.http.query) = { name: "query" }];
+}
+
+// ListKalshiMarketsResponse contains Kalshi markets matching the request.
+message ListKalshiMarketsResponse {
+  // The list of Kalshi markets.
+  repeated KalshiMarket markets = 1;
+  // Pagination metadata.
+  worldmonitor.core.v1.PaginationResponse pagination = 2;
+}

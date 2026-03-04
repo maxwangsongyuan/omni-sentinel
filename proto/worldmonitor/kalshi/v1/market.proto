@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package worldmonitor.kalshi.v1;
+
+import "buf/validate/validate.proto";
+import "sebuf/http/annotations.proto";
+
+// KalshiMarket represents a prediction market contract from Kalshi.
+message KalshiMarket {
+  // Unique market ticker (e.g., "KXWORLDWAR-25").
+  string ticker = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.min_len = 1
+  ];
+  // Market title/question.
+  string title = 2;
+  // Current "Yes" price (0.0 to 1.0, representing probability).
+  double yes_price = 3 [
+    (buf.validate.field).double.gte = 0,
+    (buf.validate.field).double.lte = 1
+  ];
+  // Current "No" price (0.0 to 1.0).
+  double no_price = 4 [
+    (buf.validate.field).double.gte = 0,
+    (buf.validate.field).double.lte = 1
+  ];
+  // Total trading volume in contracts.
+  int64 volume = 5 [
+    (buf.validate.field).int64.gte = 0,
+    (sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER
+  ];
+  // Open interest (number of outstanding contracts).
+  int64 open_interest = 6 [
+    (buf.validate.field).int64.gte = 0,
+    (sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER
+  ];
+  // URL to the Kalshi market page.
+  string url = 7;
+  // Market close time, as Unix epoch milliseconds. Zero if no expiry.
+  int64 closes_at = 8 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Market category (e.g., "Politics", "Economics").
+  string category = 9;
+  // Market status (e.g., "open", "closed", "settled").
+  string status = 10;
+  // Event ticker this market belongs to.
+  string event_ticker = 11;
+}

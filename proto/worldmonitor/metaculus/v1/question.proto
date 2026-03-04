@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package worldmonitor.metaculus.v1;
+
+import "buf/validate/validate.proto";
+import "sebuf/http/annotations.proto";
+
+// MetaculusQuestion represents a forecasting question from Metaculus.
+message MetaculusQuestion {
+  // Unique question ID.
+  int64 id = 1 [
+    (buf.validate.field).required = true,
+    (sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER
+  ];
+  // Question title.
+  string title = 2;
+  // Community median prediction (0.0 to 1.0 for binary questions).
+  double community_prediction = 3 [
+    (buf.validate.field).double.gte = 0,
+    (buf.validate.field).double.lte = 1
+  ];
+  // Number of forecasters who have made predictions.
+  int32 forecaster_count = 4 [(buf.validate.field).int32.gte = 0];
+  // URL to the Metaculus question page.
+  string url = 5;
+  // Question close time, as Unix epoch milliseconds. Zero if no expiry.
+  int64 closes_at = 6 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Resolution time, as Unix epoch milliseconds. Zero if not yet resolved.
+  int64 resolve_time = 7 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Question category/topic.
+  string category = 8;
+  // Question status (e.g., "open", "closed", "resolved").
+  string status = 9;
+  // Question type (e.g., "binary", "numeric", "date").
+  string question_type = 10;
+}

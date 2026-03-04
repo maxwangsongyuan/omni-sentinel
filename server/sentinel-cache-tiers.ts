@@ -14,6 +14,6 @@ export const SENTINEL_CACHE_TIERS: Record<string, string> = {
   '/api/trajectory/v1/query-flight-history': 'slow',
   '/api/analyst/v1/run-assessment': 'slow',
   '/api/analyst/v1/get-prediction': 'slow',
-  '/api/kalshi/v1/list-markets': 'medium',
-  '/api/metaculus/v1/list-questions': 'medium',
+  '/api/kalshi/v1/list-kalshi-markets': 'medium',
+  '/api/metaculus/v1/list-metaculus-questions': 'medium',
 };

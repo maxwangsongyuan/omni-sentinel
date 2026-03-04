@@ -43,11 +43,6 @@ interface ToolUseBlock {
   input: Record<string, unknown>;
 }
 
-interface TextBlock {
-  type: 'text';
-  text: string;
-}
-
 interface ToolResultBlock {
   type: 'tool_result';
   tool_use_id: string;
@@ -69,7 +64,7 @@ export interface ChatOutput {
   status: 'ok' | 'error';
   reply: string;
   toolsUsed: string[];
-  tokensUsed: { input: number; output: number };
+  tokensUsed: number;
   disclaimer: string;
   errorMessage: string;
 }
@@ -83,7 +78,7 @@ function makeErrorResult(errorMessage: string): ChatOutput {
     status: 'error',
     reply: '',
     toolsUsed: [],
-    tokensUsed: { input: 0, output: 0 },
+    tokensUsed: 0,
     disclaimer: INTEL_DISCLAIMER,
     errorMessage,
   };
@@ -91,13 +86,13 @@ function makeErrorResult(errorMessage: string): ChatOutput {
 
 function extractTextFromContent(content: ContentBlock[]): string {
   return content
-    .filter((b): b is TextBlock => b.type === 'text')
-    .map((b) => b.text)
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
     .join('\n');
 }
 
 function extractToolUseFromContent(content: ContentBlock[]): ToolUseBlock[] {
-  return content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+  return content.filter((b: any) => b.type === 'tool_use') as any as ToolUseBlock[];
 }
 
 async function callClaudeApi(
@@ -178,7 +173,7 @@ export async function handleChat(input: ChatInput): Promise<ChatOutput> {
           status: 'ok',
           reply,
           toolsUsed,
-          tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
+          tokensUsed: totalInputTokens + totalOutputTokens,
           disclaimer: INTEL_DISCLAIMER,
           errorMessage: '',
         };
@@ -220,7 +215,7 @@ export async function handleChat(input: ChatInput): Promise<ChatOutput> {
         status: 'ok',
         reply: reply || 'No response generated.',
         toolsUsed,
-        tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
+        tokensUsed: totalInputTokens + totalOutputTokens,
         disclaimer: INTEL_DISCLAIMER,
         errorMessage: '',
       };
@@ -232,7 +227,7 @@ export async function handleChat(input: ChatInput): Promise<ChatOutput> {
       status: 'ok',
       reply: '已达到最大工具调用轮次，以下是基于已获取数据的分析。',
       toolsUsed,
-      tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
+      tokensUsed: totalInputTokens + totalOutputTokens,
       disclaimer: INTEL_DISCLAIMER,
       errorMessage: '',
     };

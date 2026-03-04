@@ -44,7 +44,7 @@ export interface BriefingOutput {
   status: 'ok' | 'error';
   sections: BriefingSection[];
   generatedAt: number;
-  tokensUsed: { input: number; output: number };
+  tokensUsed: number;
   disclaimer: string;
   errorMessage: string;
 }
@@ -57,7 +57,7 @@ const ERROR_RESULT: BriefingOutput = {
   status: 'error',
   sections: [],
   generatedAt: 0,
-  tokensUsed: { input: 0, output: 0 },
+  tokensUsed: 0,
   disclaimer: INTEL_DISCLAIMER,
   errorMessage: '',
 };
@@ -194,7 +194,7 @@ export async function handleBriefing(input: BriefingInput): Promise<BriefingOutp
           status: 'ok',
           sections,
           generatedAt: Date.now(),
-          tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
+          tokensUsed: totalInputTokens + totalOutputTokens,
           disclaimer: INTEL_DISCLAIMER,
           errorMessage: '',
         };
@@ -263,7 +263,7 @@ export async function handleBriefing(input: BriefingInput): Promise<BriefingOutp
       status: 'ok',
       sections,
       generatedAt: Date.now(),
-      tokensUsed: { input: totalInputTokens, output: totalOutputTokens },
+      tokensUsed: totalInputTokens + totalOutputTokens,
       disclaimer: INTEL_DISCLAIMER,
       errorMessage: '',
     };

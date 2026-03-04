@@ -69,7 +69,7 @@ register(
   undefined,
   async (args) => {
     const { listAcledEvents } = await import('../../conflict/v1/list-acled-events.ts');
-    return listAcledEvents(stubCtx(), { country: args.country as string ?? '', start: args.start as number ?? 0, end: args.end as number ?? 0 });
+    return listAcledEvents(stubCtx(), { country: args.country as string ?? '', start: args.start as number ?? 0, end: args.end as number ?? 0, pageSize: 20, cursor: '' });
   },
 );
 
@@ -93,7 +93,7 @@ register(
   undefined,
   async (args) => {
     const { listUcdpEvents } = await import('../../conflict/v1/list-ucdp-events.ts');
-    return listUcdpEvents(stubCtx(), { country: args.country as string ?? '' });
+    return listUcdpEvents(stubCtx(), { country: args.country as string ?? '', start: 0, end: 0, pageSize: 20, cursor: '' });
   },
 );
 

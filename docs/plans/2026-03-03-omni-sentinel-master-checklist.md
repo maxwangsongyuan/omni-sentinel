@@ -14,7 +14,7 @@
 | Document | Path |
 |----------|------|
 | Design doc (approved) | `docs/plans/2026-03-03-omni-sentinel-design.md` |
-| Implementation plan (needs revision) | `docs/plans/2026-03-03-omni-sentinel-implementation.md` |
+| Implementation plan v2 (revised) | `docs/plans/2026-03-03-omni-sentinel-implementation-v2.md` |
 | Security review | `docs/reviews/security-review.md` |
 | Scalability review | `docs/reviews/scalability-review.md` |
 | Cost review | `docs/reviews/cost-review.md` |
@@ -103,9 +103,12 @@ These are the owner's explicit decisions that override reviewer recommendations:
 - [ ] **P0-3** Clarify API key storage: server-side `process.env` ONLY, remove `localStorage` reference from design doc `[30m]`
 - [ ] **P0-4** Create minimum viable frontend components (SocialFeedPanel, AnalystPanel) — backend without frontend is useless `[6-8h]`
 - [ ] **P0-5** Input validation utility: `validateStringParam(value, maxLength, pattern?)` for subreddit names, icao24, Twitter accounts, Bluesky query `[30m]`
-- [ ] **P0-6** Claude response validation: JSON extraction (strip code fences), schema validation, HTML sanitization `[1h]`
+- [ ] **P0-6** Claude response validation: JSON extraction (strip code fences), schema validation, HTML sanitization (use existing DOMPurify) `[1h]`
+- [ ] **P0-7** Create `.gitattributes` with merge strategies for generated code + lock files `[30m]` — *promoted from P3-12*
+- [ ] **P0-8** Pre-create ALL sentinel feature IDs, panel registrations, and gateway cache entries in Module 0 (placeholders for parallel modules) `[2h]`
+- [ ] **P0-9** Create `sentinel-en.json` for i18n (avoid editing upstream's 2300-line `en.json`) `[1h]`
 
-**Total P0 effort: ~12-14 hours**
+**Total P0 effort: ~16-18 hours**
 
 ---
 
@@ -166,7 +169,7 @@ These are the owner's explicit decisions that override reviewer recommendations:
 - [ ] **P3-9** Update existing AI consumers (DeductionPanel, classify-event, risk-scores) to use Claude `[8h]`
 - [ ] **P3-10** Structured logging drain to external service `[4h]`
 - [ ] **P3-11** Feature flag localStorage migration with schema versioning `[1h]`
-- [ ] **P3-12** Generated code merge strategy (.gitignore/.gitattributes) `[2h]`
+- [x] ~~**P3-12** Generated code merge strategy (.gitignore/.gitattributes) `[2h]`~~ — **PROMOTED to P0-7**
 - [ ] **P3-13** Model tiering: Haiku 4.5 for summarization, Sonnet 4 for analysis `[2h]`
 - [ ] **P3-14** Anthropic prompt caching for JP 3-60 system prompt `[2h]`
 - [ ] **P3-15** Ethical disclaimer on AnalystPanel output `[1h]`
@@ -215,13 +218,12 @@ These are the owner's explicit decisions that override reviewer recommendations:
 | Vercel (free tier) | $0 | $0 | $0 |
 | Railway | $5 | $5 | $5 |
 | Upstash Redis (free tier) | $0 | $0 | $0 |
-| Twitter/X API (Basic tier) | $200 | $200 | $200 |
+| TwitterAPI.io (adapter pattern) | ~$5 | ~$10 | ~$15 |
 | All other APIs | $0 | $0 | $0 |
-| **Total** | **~$211** | **~$220** | **~$255+** |
-| **Total (without Twitter)** | **~$11** | **~$20** | **~$55+** |
+| **Total** | **~$16** | **~$30** | **~$70+** |
 
 ### Key Cost Insight
-Twitter dominates the budget. If it proves not worth $200/mo, it can be disabled via killswitch without affecting other modules.
+Using TwitterAPI.io (~$0.15/1K tweets) instead of official X API ($200/mo) reduces total cost by ~90%. Twitter adapter can be swapped via `process.env.TWITTER_ADAPTER` without code changes.
 
 ---
 
@@ -346,7 +348,7 @@ Twitter dominates the budget. If it proves not worth $200/mo, it can be disabled
 
 ## L. Open Questions (Resolve Before Implementation)
 
-- [ ] **Twitter API tier**: Basic ($200/mo) or explore `TwitterAPI.io` alternative ($0.15/1K tweets)?
+- [x] **Twitter API tier**: ~~Basic ($200/mo)~~ → **RESOLVED: Use TwitterAPI.io adapter pattern (~$0.15/1K tweets)**. See `docs/research/twitter-telegram-osint-guide.md`.
 - [ ] **Facebook integration**: Is Meta Content Library API accessible for this project? What's the application process?
 - [ ] **YouTube scope**: Which channels to monitor? Need a curated list like the Telegram channels.
 - [ ] **Reddit ToS**: Does feeding posts to Claude for AI analysis violate Reddit's data terms?
@@ -356,4 +358,27 @@ Twitter dominates the budget. If it proves not worth $200/mo, it can be disabled
 
 ---
 
-*Last updated: 2026-03-03. This checklist consolidates all findings from 6 review agents and global platform research. It is the authoritative reference for implementation planning.*
+---
+
+## M. Codebase Reality Check (2026-03-04 Review)
+
+Post-review agents actually inspected the codebase and found critical mismatches between plan assumptions and reality:
+
+| # | Assumption | Reality | Impact |
+|---|-----------|---------|--------|
+| 1 | Components are `.tsx` with Preact JSX | `.ts` files with `Panel` base class + `h()` DOM helper | **BLOCKER** — all frontend code rewritten |
+| 2 | Tests use vitest | `node:test` + `node:assert/strict`, `.test.mts` files | **BLOCKER** — all test code rewritten |
+| 3 | `panels.ts` exports `PanelConfig[]` | `Record<string, PanelConfig>` keyed by slug | HIGH — merge pattern changed |
+| 4 | `RuntimeFeatureId` extensible from external file | Closed TypeScript union type — must edit core file | HIGH — accepted as minimal edit |
+| 5 | Proto files are plain proto3 | Require `sebuf.http` annotations (base_path, path, method) | HIGH — all proto code updated |
+| 6 | OpenSky Impala DB is REST API | SSH/JDBC only; REST endpoint returns last ~1h only | HIGH — Phase 1 scope reduced |
+| 7 | `buf` CLI installed | Not on PATH, requires manual install | HIGH — added to setup |
+| 8 | `.env.example` doesn't exist | Already exists (170 lines of upstream config) | MEDIUM — append, not create |
+| 9 | Need custom `sanitizeHtml()` | DOMPurify already in `package.json` | MEDIUM — use existing |
+| 10 | Prediction proto can be extended | Different market models (binary vs continuous) | MEDIUM — separate protos |
+
+All fixes applied to implementation plan v2 and design doc.
+
+---
+
+*Last updated: 2026-03-04. This checklist consolidates all findings from 6 review agents, global platform research, and 3 post-review codebase verification agents. It is the authoritative reference for implementation planning.*

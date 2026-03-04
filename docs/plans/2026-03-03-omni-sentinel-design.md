@@ -11,10 +11,11 @@
 Omni Sentinel extends World Monitor with deeper AI analysis (Claude API), expanded social media intelligence, military analysis frameworks (JP 3-60), government data integration, historical trajectory tracking, and enhanced prediction market coverage.
 
 **Core decisions:**
-- **Architecture:** Plugin mode — all new features follow World Monitor's proto-first service pattern
-- **Deployment:** Vercel + Railway (inherit upstream infrastructure)
-- **AI strategy:** Claude as primary provider, OpenRouter as fallback. Remove Ollama/Groq. Browser T5 kept as last-resort offline fallback for desktop
-- **Scope:** All features developed in parallel, no phased rollout
+- **Architecture:** Plugin mode — all new features follow World Monitor's proto-first service pattern (sebuf proto with HTTP annotations)
+- **Deployment:** Vercel + Railway (inherit upstream infrastructure), phased rollout behind feature flags
+- **AI strategy:** Claude as primary (Haiku 4.5 for summaries, Sonnet 4 for analysis), OpenRouter as fallback. Browser T5 kept as last-resort offline fallback for desktop
+- **UI pattern:** Vanilla DOM Panel class + `h()` helper (NOT JSX — codebase uses `.ts` files, not `.tsx`)
+- **Scope:** All features developed in parallel worktrees, phased rollout (RSS → Claude → Social → Analyst → GovData → Prediction → Trajectory)
 
 ---
 
@@ -51,7 +52,7 @@ src/services/claude/     — Frontend client wrapper
 
 - API Key: `process.env.CLAUDE_API_KEY` (server-side only, never exposed to client)
 - Feature flag: `aiClaude` in runtime-config
-- Default model: `claude-sonnet-4-20250514`
+- Models: `claude-haiku-4-5-20251001` (summarization), `claude-sonnet-4-20250514` (analysis/prediction)
 - Settings UI: Add Claude section to existing AI settings panel
 
 ### Integration Points
@@ -131,14 +132,16 @@ proto/worldmonitor/analyst/v1/
 
 ### JP 3-60 Six-Step Pipeline
 
-Each step is a Claude API call with step-specific system prompt and data context:
+For MVP, all 6 steps are combined into a **single Claude API call** with a comprehensive JP 3-60 system prompt (using Anthropic prompt caching). Future enhancement may split into 6 sequential calls for deeper analysis.
+
+The 6 conceptual steps embedded in the system prompt:
 
 1. **Commander's Objectives** — User specifies region/event of interest
-2. **Target Development** — Auto-pull relevant data from ADS-B, AIS, ACLED, GDELT, social media
-3. **Capabilities Analysis** — Claude analyzes military capabilities (weapons, forces, bases)
-4. **Commander's Decision** — Claude generates action scenarios with probability assessment
-5. **Mission Planning** — Claude projects timelines and operational sequences
-6. **Assessment** — Claude produces composite score using 6-dimension weighted model
+2. **Target Development** — Context data from ADS-B, AIS, ACLED, GDELT, social media
+3. **Capabilities Analysis** — Military capabilities (weapons, forces, bases)
+4. **Commander's Decision** — Action scenarios with probability assessment
+5. **Mission Planning** — Timelines and operational sequences
+6. **Assessment** — Composite score using 6-dimension weighted model
 
 ### Six-Dimension Weighted Scoring
 
@@ -272,8 +275,8 @@ All new services follow this pattern:
 
 | Service | Cache Tier | TTL |
 |---------|-----------|-----|
-| Claude summarize | medium | 5min |
-| Claude analyze | slow | 15min |
+| Claude summarize | medium | 15min |
+| Claude analyze | slow | 30min |
 | Social media feeds | fast | 1-5min (varies by platform) |
 | NOTAM/NAVTEX | medium | 15min |
 | Trajectory history | slow | 1h |
@@ -300,3 +303,12 @@ All new UI strings added to `src/locales/en.json` (other languages can follow la
 4. **YouTube addition:** Added YouTube as a new social media platform (YouTube Data API v3, API key free tier, 5min cache, Edge Function).
 5. **NAVTEX note:** Clarified that NAVTEX should enhance the existing maritime navigational warnings service, not be a new standalone service.
 6. **Bluesky correction:** Noted that the AT Protocol API limit is 25 per request, not 100.
+
+### 2026-03-04 — Post-codebase-review fixes
+
+7. **Cache TTL update:** Increased Claude cache TTLs from 5min/15min to 15min/30min (cost + scalability review consensus).
+8. **Model tiering:** Changed from single Sonnet model to Haiku 4.5 for summarization + Sonnet 4 for analysis (67% cost reduction on summarization).
+9. **JP 3-60 single-call MVP:** Changed from 6 sequential API calls to single call with comprehensive system prompt for MVP. Six-call pipeline deferred to future enhancement.
+10. **Phased rollout:** Changed from "no phased rollout" to phased deployment behind feature flags.
+11. **UI pattern clarification:** Added note that codebase uses vanilla DOM Panel class pattern (`.ts` files with `h()` helper), NOT Preact JSX (`.tsx`).
+12. **Proto annotations:** Clarified that all protos require `sebuf.http` annotations (service base_path + per-RPC path/method).

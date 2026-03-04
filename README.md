@@ -1,64 +1,222 @@
-# Omni Sentinel
+# Omni Sentinel 全域哨兵
 
-**Enhanced global situational awareness platform** — extending [World Monitor](https://github.com/koala73/worldmonitor) with additional OSINT data sources, deeper AI-powered analysis (Claude + Gemini), and expanded social media intelligence.
-
-[![Upstream](https://img.shields.io/badge/Upstream-World_Monitor-orange?style=flat&logo=github)](https://github.com/koala73/worldmonitor)
+[![Upstream](https://img.shields.io/badge/上游-World_Monitor_v2.5.24-orange?style=flat&logo=github)](https://github.com/koala73/worldmonitor)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-> **Attribution**: This project is a fork of [World Monitor](https://github.com/koala73/worldmonitor) by [Elie Habib](https://github.com/koala73), licensed under AGPL-3.0. All original work is credited to the World Monitor team. We build upon their excellent foundation.
+**增强型全球态势感知平台** — 基于 [World Monitor](https://github.com/koala73/worldmonitor) (by [Elie Habib](https://github.com/koala73)) 的 fork，扩展了 AI 分析能力、社交媒体情报源和军事分析框架。
+
+> **署名声明**: 本项目 fork 自 [World Monitor](https://github.com/koala73/worldmonitor)，遵循 AGPL-3.0 协议。上游团队的原始工作保留完整署名。我们在其优秀基础上进行扩展。
 
 <p align="center">
   <a href="./docs/DOCUMENTATION.md"><strong>Documentation</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/koala73/worldmonitor"><strong>Upstream: World Monitor</strong></a>
+  <a href="https://github.com/koala73/worldmonitor"><strong>上游: World Monitor</strong></a> &nbsp;·&nbsp;
+  <a href="./docs/plans/2026-03-03-omni-sentinel-design.md"><strong>设计文档</strong></a> &nbsp;·&nbsp;
+  <a href="./LEGAL.md"><strong>数据源合规</strong></a>
 </p>
 
 ---
 
-## What Omni Sentinel Adds
+## 这是什么？
 
-| World Monitor (Upstream) | Omni Sentinel (This Fork) |
-| --- | --- |
-| Groq / OpenRouter / Ollama LLM | + Claude API + Gemini API for deeper geopolitical analysis |
-| 26 Telegram OSINT channels | + Reddit, X/Twitter, Bluesky, TikTok, VK social media feeds |
-| 170+ RSS news feeds | + NOTAM/TFR aviation restrictions, NAVTEX maritime warnings |
-| ACLED + GDELT conflict data | + Polymarket prediction markets, defense stock tracking |
-| ADS-B + AIS tracking | + Historical trajectory database with self-hosted collection |
-| 19 UI languages | Inherited — full multilingual support out of the box |
+Omni Sentinel 是一个**开源情报 (OSINT) 态势感知平台**，继承了 World Monitor 的全部能力（ADS-B 军机追踪、AIS 舰船监控、170+ RSS 新闻源、ACLED/GDELT 冲突数据、3D 地球可视化等），并在此基础上增加了 7 个核心模块。
+
+### 我们在上游基础上增加了什么
+
+| 维度 | World Monitor (上游已有) | Omni Sentinel (本 fork 新增) |
+|------|-------------------------|------------------------------|
+| **AI 分析** | Groq / OpenRouter / Ollama | + **Claude API** (Haiku 摘要 + Sonnet 深度分析)，OpenRouter fallback，保留 Browser T5 离线兜底 |
+| **社交媒体** | 26 个 Telegram OSINT 频道 | + **Reddit** (OAuth2) + **X/Twitter** (adapter pattern) + **Bluesky** (AT Protocol) + **YouTube** (Data API) + **TikTok** (Apify) + **VK** |
+| **军事分析** | AI Deduction 面板 | + **JP 3-60 联合瞄准框架** — 六维加权评分模型，结构化态势评估 |
+| **政府数据** | ACLED + GDELT 冲突数据 | + **FAA NOTAM** 临时飞行限制 + **OpenSanctions** 制裁名单 |
+| **历史轨迹** | 实时追踪（无历史） | + **OpenSky Impala DB** 航班历史轨迹 + 时间滑块回放 |
+| **预测市场** | Polymarket | + **Kalshi** (美国合规市场) + **Metaculus** (社区预测) + AI-vs-市场分歧检测 |
+| **新闻扩展** | 170+ RSS feeds | + **ISW**, **INSS**, **IISS**, **Al-Monitor**, **Middle East Eye** 等缺失智库源 |
+
+### 上游已有能力（完整继承）
+
+以下能力**不是我们做的**，是 World Monitor 上游已有的：
+
+- 40+ 可切换地图数据图层（军事基地、核设施、海底电缆、管道等）
+- ADS-B 军机实时追踪 + AIS 舰船监控
+- 3D WebGL 地球 (deck.gl + MapLibre GL)
+- 170+ RSS 新闻聚合 + AI 摘要
+- 26 个 Telegram OSINT 频道
+- Polymarket 预测市场
+- 19 种语言 UI + RTL 支持
+- Tauri 桌面应用 (macOS/Windows/Linux) + PWA
+- 92 个证券交易所 + 13 家央行数据
+- 22 个实时摄像头 (含德黑兰)
+- NASA FIRMS 热异常检测（爆炸/火灾）
+- GPS 干扰检测、网络中断监控
+
+---
+
+## 架构概览
+
+```
+数据源层                AI 分析层                    展示层
+─────────            ─────────────              ──────────
+Reddit    ─┐                                    ┌─ SocialFeedPanel
+X/Twitter  │         ┌─────────────┐            │
+Bluesky    ├─ Edge ─→│ Claude API  │─→ Cache ─→─┤  AnalystPanel
+YouTube    │  Func   │ (Haiku摘要)  │  (Redis)   │
+TikTok     │         │ (Sonnet分析) │            │  NotamPanel
+VK        ─┘         └──────┬──────┘            │
+                            │                    │  TrajectoryPanel
+FAA NOTAM ─── Edge ─────────┤                    │
+OpenSanctions              │                    │  PredictionPanel
+OpenSky   ─── Edge ─────────┘                    │
+Kalshi/Metaculus                                └─ 3D Globe 图层
+```
+
+### 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| Frontend | Preact + TypeScript + MapLibre GL + Deck.gl |
+| Backend | Vercel Edge Functions + Railway relay |
+| Cache | Upstash Redis (fast/medium/slow/static 四级) |
+| Proto | buf/sebuf codegen → typed client + server |
+| AI | Claude (primary) → OpenRouter → Browser T5 (offline) |
+
+### Fork 管理策略
+
+为了保持与上游同步、减少 merge conflict，我们采用**配置隔离**策略：
+
+```
+绝对不直接改的上游核心文件          我们的 Sentinel 配置文件
+──────────────────────────     ────────────────────────
+src/config/panels.ts        ← imports ← src/config/sentinel-panels.ts
+src/services/summarization.ts ← imports ← src/services/sentinel-ai-config.ts
+src/services/runtime-config.ts ← imports ← src/services/sentinel-features.ts
+server/gateway.ts           ← imports ← server/sentinel-gateway-config.ts
+```
+
+对核心文件的改动限制在：**一行 import + 一行 merge**，标记 `// SENTINEL:` 注释。
 
 ---
 
-## Why Omni Sentinel?
+## 社交媒体平台优先级（按地区研究确定）
 
-| Problem                            | Solution                                                                                                   |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| News scattered across 100+ sources | **Single unified dashboard** with 170+ curated feeds across 15 categories                                  |
-| No geospatial context for events   | **Interactive map** with 40+ toggleable data layers                                                        |
-| Information overload               | **AI-synthesized briefs** with focal point detection and local LLM support                                 |
-| Crypto/macro signal noise          | **7-signal market radar** with composite BUY/CASH verdict                                                  |
-| Expensive OSINT tools ($$$)        | **100% free & open source**                                                                                |
-| Static news feeds                  | **Real-time updates** with live video streams and AI-powered deductions                                    |
-| Cloud-dependent AI tools           | **Run AI locally** with Ollama/LM Studio — no API keys, no data leaves your machine. Opt-in **Headline Memory** builds a local semantic index of every headline for RAG-powered queries |
-| Web-only dashboards                | **Native desktop app** (Tauri) for macOS, Windows, and Linux + installable PWA with offline map support    |
-| Flat 2D maps                       | **3D WebGL globe** with deck.gl rendering and 40+ toggleable data layers                                   |
-| English-only OSINT tools           | **19 languages** with native-language RSS feeds, AI-translated summaries, and RTL support for Arabic       |
-| Siloed financial data              | **Finance variant** with 92 stock exchanges, 19 financial centers, 13 central banks, BIS data, WTO trade policy, and Gulf FDI tracking |
-| Undocumented, fragile APIs         | **Proto-first API contracts** — 22 typed services with auto-generated clients, servers, and OpenAPI docs   |
+基于 100+ 国家的社交媒体使用研究 ([详细数据](./docs/research/global-platform-map.md))，按覆盖面确定集成优先级：
+
+| 优先级 | 平台 | 覆盖国家数 | API 成本 | 状态 |
+|--------|------|-----------|---------|------|
+| Tier 1 | Telegram | 35+ | 免费 | 上游已有 |
+| Tier 1 | X/Twitter | 25+ | ~$5-15/月 (TwitterAPI.io) | 待开发 |
+| Tier 1 | YouTube | 80+ | 免费 | 待开发 |
+| Tier 2 | Reddit | 英语圈 | 免费 (OAuth) | 待开发 |
+| Tier 2 | Bluesky | 增长中 | 免费 (AT Protocol) | 待开发 |
+| Tier 2 | VK | 俄罗斯/白俄 | 免费 | 待开发 |
+| Tier 2 | TikTok | 15+ | Apify 付费 | 待开发 |
+
+> **Twitter 成本说明**: 不使用官方 X API ($200/月)，采用 adapter pattern 支持第三方数据源切换 (TwitterAPI.io ~$0.15/1K tweets)。详见 [Twitter/Telegram OSINT 指南](./docs/research/twitter-telegram-osint-guide.md)。
+
+### 地区聚类
+
+| 聚类 | 核心平台 | 代表国家 |
+|------|---------|---------|
+| Telegram 主导 | Telegram | 俄罗斯、乌克兰、伊朗、叙利亚、埃塞俄比亚 |
+| Facebook 即互联网 | Facebook | 菲律宾、缅甸、撒哈拉以南非洲 |
+| WhatsApp 优先 | WhatsApp → Facebook/YouTube | 巴西、印度、印尼、尼日利亚 |
+| 微信生态 | 微信/微博/抖音 | 中国大陆 |
+| 超级应用 | LINE/KakaoTalk | 日本、韩国、台湾、泰国 |
+| Twitter 中心 | X/Twitter | 美国、英国、日本、肯尼亚、沙特 |
+
+---
+
+## 月度运行成本
+
+| 项目 | 轻度使用 | 中度使用 | 重度使用 |
+|------|---------|---------|---------|
+| Claude API (Haiku + Sonnet + cache) | ~$6 | ~$15 | ~$50+ |
+| Vercel (free tier) | $0 | $0 | $0 |
+| Railway (Telegram relay) | $5 | $5 | $5 |
+| Upstash Redis (free tier) | $0 | $0 | $0 |
+| TwitterAPI.io | ~$5 | ~$10 | ~$15 |
+| 其他 API | $0 | $0 | $0 |
+| **合计** | **~$16** | **~$30** | **~$70+** |
 
 ---
 
-## Live Demos
+## 项目文档
 
-| Variant             | URL                                                          | Focus                                            |
-| ------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
-| **World Monitor**   | [worldmonitor.app](https://worldmonitor.app)                 | Geopolitics, military, conflicts, infrastructure |
-| **Tech Monitor**    | [tech.worldmonitor.app](https://tech.worldmonitor.app)       | Startups, AI/ML, cloud, cybersecurity            |
-| **Finance Monitor** | [finance.worldmonitor.app](https://finance.worldmonitor.app) | Global markets, trading, central banks, Gulf FDI |
-| **Happy Monitor**   | [happy.worldmonitor.app](https://happy.worldmonitor.app)     | Good news, positive trends, uplifting stories    |
-
-All four variants run from a single codebase — switch between them with one click via the header bar.
+| 文档 | 说明 |
+|------|------|
+| [`docs/plans/2026-03-03-omni-sentinel-design.md`](./docs/plans/2026-03-03-omni-sentinel-design.md) | 批准的设计文档 |
+| [`docs/plans/2026-03-03-omni-sentinel-implementation-v2.md`](./docs/plans/2026-03-03-omni-sentinel-implementation-v2.md) | 实现计划 v2 (含 TDD 步骤) |
+| [`docs/plans/2026-03-03-omni-sentinel-master-checklist.md`](./docs/plans/2026-03-03-omni-sentinel-master-checklist.md) | 总清单 (P0-P3 优先级) |
+| [`docs/reviews/`](./docs/reviews/) | 5 个专项审查 + 综合交叉评审 |
+| [`docs/research/global-platform-map.md`](./docs/research/global-platform-map.md) | 100+ 国家社交媒体平台研究 |
+| [`docs/research/twitter-telegram-osint-guide.md`](./docs/research/twitter-telegram-osint-guide.md) | Twitter/Telegram OSINT 技术指南 |
+| [`LEGAL.md`](./LEGAL.md) | 22 个数据源 ToS 合规分析 |
 
 ---
+
+## 数据源与引用
+
+### 新增数据源
+
+| 数据源 | 类型 | API | 合规风险 | 详情 |
+|--------|------|-----|---------|------|
+| [Anthropic Claude API](https://docs.anthropic.com/) | AI 分析 | 官方 API | 低 | Haiku 摘要 + Sonnet 分析 |
+| [Reddit API](https://www.reddit.com/dev/api/) | 社交媒体 | OAuth2 | 中高 (禁止 AI 训练) | r/OSINT, r/geopolitics 等 |
+| [TwitterAPI.io](https://twitterapi.io/) | 社交媒体 | REST API | 高 (第三方) | Adapter pattern，可切换 |
+| [Bluesky AT Protocol](https://docs.bsky.app/) | 社交媒体 | 公开 API | 低 | 无需认证，limit=25 |
+| [YouTube Data API v3](https://developers.google.com/youtube/v3) | 社交媒体 | API Key (免费) | 低 | 10K units/day |
+| [Apify TikTok Scraper](https://apify.com/) | 社交媒体 | Apify Actor | 高 (ToS 禁止爬取) | Railway worker 运行 |
+| [VK API v5](https://dev.vk.com/) | 社交媒体 | Service Token | 高 (俄罗斯数据法) | 军事公开群组 |
+| [FAA NOTAM](https://notams.aim.faa.gov/) | 政府数据 | REST API | 低 | 临时飞行限制 |
+| [OpenSanctions](https://opensanctions.org/) | 政府数据 | 免费 API | 低 | 330 个全球制裁源 |
+| [OpenSky Network](https://opensky-network.org/) | 历史轨迹 | Impala DB | 低 | 学术免费 |
+| [Kalshi](https://kalshi.com/) | 预测市场 | 公开 API | 低 | 美国合规市场 |
+| [Metaculus](https://metaculus.com/) | 预测市场 | 公开 API | 低 | 社区预测 |
+
+### 上游已有数据源（继承自 World Monitor）
+
+ADS-B Exchange / OpenSky (实时) · AISStream.io · ACLED · GDELT · NASA FIRMS · USGS · Polymarket · CoinGecko · Yahoo Finance · Cloudflare Radar · 170+ RSS feeds · 26 Telegram OSINT 频道 · 22 实时摄像头 — 完整列表见 [上游 README](https://github.com/koala73/worldmonitor)
+
+---
+
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/maxwangsongyuan/omni-sentinel.git
+cd omni-sentinel
+
+# 安装依赖
+npm install
+
+# 配置环境变量（至少需要 Claude API key 才能使用 AI 功能）
+cp .env.example .env.local
+# 编辑 .env.local 填入你的 API keys
+
+# 启动开发服务器
+npm run dev
+```
+
+> 所有新功能都有独立的 feature flag 和 killswitch。不配置 API key 的模块会显示"未配置"状态而非空白。
+
+---
+
+## License
+
+GNU Affero General Public License v3.0 (AGPL-3.0) — 详见 [LICENSE](LICENSE)。
+
+根据 AGPL-3.0，所有对本项目的修改必须以相同协议开源。
+
+---
+
+## 致谢
+
+**上游项目**: [World Monitor](https://github.com/koala73/worldmonitor) by [Elie Habib](https://github.com/koala73) 及其贡献者团队。本项目的地图可视化、数据聚合、多语言支持等核心能力均来自上游。
+
+---
+
+<details>
+<summary><strong>📖 以下为继承自 World Monitor 的详细技术文档（点击展开）</strong></summary>
 
 ## Key Features
 
@@ -2009,3 +2167,5 @@ If you discover a vulnerability, please see our [Security Policy](./SECURITY.md)
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=koala73/worldmonitor&type=Date&type=Date" />
  </picture>
 </a>
+
+</details>

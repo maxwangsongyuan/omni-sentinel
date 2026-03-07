@@ -249,6 +249,10 @@ Using TwitterAPI.io (~$0.15/1K tweets) instead of official X API ($200/mo) reduc
 - [ ] Feature flag + killswitch
 - [ ] Settings UI (API key input)
 - [ ] Unit tests
+- [x] **Intelligence Assistant** — IntelChatPanel with 78-tool Claude Sonnet chat loop + automated briefing generation
+- [x] **Tavily web search** — `web_search`, `web_extract`, `verify_claim` tools for public internet search and claim verification
+- [x] **System prompt** — verification rules (✅ corroborated / ⚠️ unverified / ❌ contradicted) + web search instructions
+- [x] **Tests** — 29 unit tests (registry, mock-based scoring logic, API error handling, edge cases)
 
 ### Module 2: Social Media Integration
 - [ ] Unified `SocialPost` type in common.proto

@@ -26,6 +26,7 @@ Omni Sentinel 是一个**开源情报 (OSINT) 态势感知平台**，继承了 W
 | 维度 | World Monitor (上游已有) | Omni Sentinel (本 fork 新增) |
 |------|-------------------------|------------------------------|
 | **AI 分析** | Groq / OpenRouter / Ollama | + **Claude API** (Haiku 摘要 + Sonnet 深度分析)，OpenRouter fallback，保留 Browser T5 离线兜底 |
+| **网页搜索** | — | + **Tavily Search API** (公开互联网搜索 + 网页内容提取 + 社交媒体声明交叉验证) |
 | **社交媒体** | 26 个 Telegram OSINT 频道 | + **Reddit** (OAuth2) + **X/Twitter** (adapter pattern) + **Bluesky** (AT Protocol) + **YouTube** (Data API) + **TikTok** (Apify) + **VK** |
 | **军事分析** | AI Deduction 面板 | + **JP 3-60 联合瞄准框架** — 六维加权评分模型，结构化态势评估 |
 | **政府数据** | ACLED + GDELT 冲突数据 | + **FAA NOTAM** 临时飞行限制 + **OpenSanctions** 制裁名单 |
@@ -61,13 +62,15 @@ Reddit    ─┐                                    ┌─ SocialFeedPanel
 X/Twitter  │         ┌─────────────┐            │
 Bluesky    ├─ Edge ─→│ Claude API  │─→ Cache ─→─┤  AnalystPanel
 YouTube    │  Func   │ (Haiku摘要)  │  (Redis)   │
-TikTok     │         │ (Sonnet分析) │            │  NotamPanel
+TikTok     │         │ (Sonnet分析) │            │  IntelChatPanel
 VK        ─┘         └──────┬──────┘            │
-                            │                    │  TrajectoryPanel
+                            │                    │  NotamPanel
 FAA NOTAM ─── Edge ─────────┤                    │
-OpenSanctions              │                    │  PredictionPanel
-OpenSky   ─── Edge ─────────┘                    │
-Kalshi/Metaculus                                └─ 3D Globe 图层
+OpenSanctions              │                    │  TrajectoryPanel
+OpenSky   ─── Edge ─────────┤                    │
+Kalshi/Metaculus            │                    │  PredictionPanel
+Tavily    ─── Edge ─────────┘                    │
+(web search + verify)                           └─ 3D Globe 图层
 ```
 
 ### 技术栈
@@ -172,6 +175,7 @@ server/gateway.ts           ← imports ← server/sentinel-gateway-config.ts
 | [OpenSky Network](https://opensky-network.org/) | 历史轨迹 | Impala DB | 低 | 学术免费 |
 | [Kalshi](https://kalshi.com/) | 预测市场 | 公开 API | 低 | 美国合规市场 |
 | [Metaculus](https://metaculus.com/) | 预测市场 | 公开 API | 低 | 社区预测 |
+| [Tavily Search API](https://tavily.com/) | 网页搜索 | REST API (免费 1000 credits/月) | 低 | 公开互联网搜索 + 内容提取 + 声明验证 |
 
 ### 上游已有数据源（继承自 World Monitor）
 
@@ -247,6 +251,8 @@ GNU Affero General Public License v3.0 (AGPL-3.0) — 详见 [LICENSE](LICENSE)�
 - **Local LLM Support** — Ollama and LM Studio (any OpenAI-compatible endpoint) run AI summarization entirely on local hardware. No API keys required, no data leaves the machine. The desktop app auto-discovers available models from the local instance and populates a selection dropdown, filtering out embedding-only models. Default fallback model: `llama3.1:8b`
 - **AI Deduction & Forecasting** — an interactive geopolitical analysis tool where analysts enter a free-text query (e.g., "What will happen in the next 24 hours in the Middle East?") and receive an LLM-generated near-term timeline deduction. The panel auto-populates context from the 15 most recent live headlines via `buildNewsContext()`, so the AI always has current situational awareness. Other panels can pre-fill and auto-submit queries via the `wm:deduct-context` custom event for seamless cross-panel deep-linking into contextual forecasts. Results are Redis-cached (1-hour TTL) by query hash to avoid redundant LLM calls
 - **Headline Memory (RAG)** — an opt-in client-side Retrieval-Augmented Generation system. When enabled in Settings, every incoming RSS headline is embedded using an ONNX model (`all-MiniLM-L6-v2`, 384-dimensional float32 vectors) running in a dedicated Web Worker, then stored in IndexedDB (`worldmonitor_vector_store`, capped at 5,000 vectors with LRU eviction by ingestion time). Any component can semantically search the headline archive using natural-language queries — results are ranked by brute-force cosine similarity and returned in score order. The entire pipeline runs locally in the browser with zero server dependency, enabling persistent semantic intelligence across sessions
+- **Intelligence Assistant** — Claude Sonnet-powered chat interface with 78 data tools spanning conflicts, markets, social media, aviation, maritime, and more. Supports multi-turn tool-use conversations and automated intelligence briefing generation
+- **Web Search & Claim Verification** — Tavily-powered public internet search (`web_search`), article extraction (`web_extract`), and cross-verification of social media claims (`verify_claim`) with corroboration scoring (✅ corroborated / ⚠️ unverified / ❌ contradicted)
 - **Hybrid Threat Classification** — instant keyword classifier with async LLM override for higher-confidence results
 - **Focal Point Detection** — correlates entities across news, military activity, protests, outages, and markets to identify convergence
 - **Country Instability Index** — real-time stability scores for every country with incoming data using weighted multi-signal blend. 23 curated tier-1 nations have tuned baseline risk profiles; all other countries receive universal scoring with sensible defaults when any event data (protests, conflicts, outages, displacement, climate anomalies) is detected
@@ -1816,7 +1822,8 @@ The `.env.example` file documents every variable with descriptions and registrat
 | Group             | Variables                                                                  | Free Tier                                  |
 | ----------------- | -------------------------------------------------------------------------- | ------------------------------------------ |
 | **AI (Local)**    | `OLLAMA_API_URL`, `OLLAMA_MODEL`                                           | Free (runs on your hardware)               |
-| **AI (Cloud)**    | `GROQ_API_KEY`, `OPENROUTER_API_KEY`                                       | 14,400 req/day (Groq), 50/day (OpenRouter) |
+| **AI (Cloud)**    | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `CLAUDE_API_KEY`                     | 14,400 req/day (Groq), 50/day (OpenRouter) |
+| **Web Search**    | `TAVILY_API_KEY`                                                           | 1,000 credits/month                        |
 | **Cache**         | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`                       | 10K commands/day                           |
 | **Markets**       | `FINNHUB_API_KEY`, `FRED_API_KEY`, `EIA_API_KEY`                           | All free tier                              |
 | **Tracking**      | `WINGBITS_API_KEY`, `AISSTREAM_API_KEY`                                    | Free                                       |
@@ -2067,6 +2074,8 @@ Desktop release details, signing hooks, variant outputs, and clean-machine valid
 - [x] Gulf Economies panel (GCC indices, currencies, oil with mini sparklines and 60-second polling)
 - [x] Mobile-optimized map (touch pan with inertia, pinch-to-zoom, bottom-sheet popups, timezone-based location detection)
 - [x] 18+ HLS native streaming channels (Fox News, ABC News AU, NHK World, TV5Monde, Tagesschau24, and more)
+- [x] Intelligence Assistant chat panel (Claude Sonnet with 78 tool-use loop, multi-turn conversations, automated briefing generation)
+- [x] Tavily web search integration (web_search, web_extract, verify_claim tools for public internet search and social media claim cross-verification)
 - [x] Live video fullscreen toggle (expand video grid to fill viewport)
 - [x] Breaking news click-through (scroll to source panel with flash highlight)
 - [x] TV Mode (ambient fullscreen panel cycling with configurable interval, 30s–2min)

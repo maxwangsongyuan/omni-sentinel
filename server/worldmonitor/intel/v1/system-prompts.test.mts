@@ -21,4 +21,10 @@ describe('system-prompts', () => {
     assert.ok(INTEL_DISCLAIMER.includes('AI'), 'Disclaimer should mention AI');
     assert.ok(INTEL_DISCLAIMER.length > 20, 'Disclaimer should be meaningful');
   });
+
+  it('CHAT_SYSTEM_PROMPT includes web search and verification instructions', () => {
+    assert.ok(CHAT_SYSTEM_PROMPT.includes('web_search'), 'Should mention web_search tool');
+    assert.ok(CHAT_SYSTEM_PROMPT.includes('verify_claim'), 'Should mention verify_claim tool');
+    assert.ok(CHAT_SYSTEM_PROMPT.includes('已验证'), 'Should include verification label format');
+  });
 });

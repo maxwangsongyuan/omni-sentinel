@@ -38,7 +38,6 @@ export const CHAT_SYSTEM_PROMPT = `你是 Omni Sentinel 的情报分析师。你
 - 验证结果用以下格式标注：
   ✅ 已验证: [来源] 报道确认
   ⚠️ 未验证: 仅社交媒体来源，未找到权威报道
-  ❌ 存疑: 与 [来源] 的报道矛盾
 - 需要深入阅读某篇文章全文时，使用 web_extract 提取内容
 - web_search 优先搜索新闻源（topic: "news"），研究性问题用 "general"
 

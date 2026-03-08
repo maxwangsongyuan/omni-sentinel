@@ -40,7 +40,7 @@ This document catalogs the legal posture of every data source in the system. It 
 | **Polymarket** | Gamma API (public, read-only) | Public read access; no authentication required for market data | Trading restricted for US persons (data viewing is global); generous rate limits | LOW |
 | **Kalshi** | Kalshi REST API | CFTC-regulated; public market data accessible | RSA key-pair authentication required; rate limits apply | LOW |
 | **Metaculus** | Metaculus REST API | API access permitted under terms | Prohibits AI/ML training without prior written permission; no automated scraping outside API | MEDIUM |
-| **Tavily** | Tavily Search API (official) | Compliant under standard API terms | 1,000 free credits/month; results are public web content; no redistribution restrictions on search results | LOW |
+| **Tavily** | Tavily Search API (official) | Compliant under standard API terms | 1,000 free credits/month; results are public web content; standard API usage terms apply to search results | LOW |
 | **Anthropic/Claude** | Anthropic API | Compliant under standard API terms | API data retained 30 days (7 days after Sept 2025); not used for training without opt-in; zero-data-retention available | LOW |
 | **OpenRouter** | OpenRouter API | Compliant under standard API terms | Prompts not logged by default; does not control downstream LLM data handling | LOW |
 

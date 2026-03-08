@@ -37,7 +37,8 @@ export type RuntimeSecretKey =
   | 'YOUTUBE_API_KEY'
   | 'FAA_API_KEY'
   | 'TIKTOK_APIFY_TOKEN'
-  | 'VK_SERVICE_TOKEN';  // SENTINEL: end
+  | 'VK_SERVICE_TOKEN'
+  | 'TAVILY_API_KEY';  // SENTINEL: end
 
 export type RuntimeFeatureId =
   | 'aiGroq'
@@ -73,7 +74,8 @@ export type RuntimeFeatureId =
   | 'trajectoryFlight'
   | 'predictionKalshi'
   | 'predictionMetaculus'
-  | 'intelChat';  // SENTINEL: end
+  | 'intelChat'
+  | 'webSearch';  // SENTINEL: end
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -136,7 +138,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   trajectoryFlight: true,
   predictionKalshi: true,
   predictionMetaculus: true,
-  intelChat: true,  // SENTINEL: end
+  intelChat: true,
+  webSearch: true,  // SENTINEL: end
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [

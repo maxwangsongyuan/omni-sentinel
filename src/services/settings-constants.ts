@@ -67,7 +67,8 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   YOUTUBE_API_KEY: 'YouTube API Key',
   FAA_API_KEY: 'FAA NOTAM API Key',
   TIKTOK_APIFY_TOKEN: 'Apify TikTok Token',
-  VK_SERVICE_TOKEN: 'VK Service Token',  // SENTINEL: end
+  VK_SERVICE_TOKEN: 'VK Service Token',
+  TAVILY_API_KEY: 'Tavily API Key',  // SENTINEL: end
 };
 
 export interface SettingsCategory {

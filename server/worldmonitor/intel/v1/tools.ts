@@ -10,6 +10,8 @@
  * SENTINEL: This file is part of the Intelligence Assistant module.
  */
 
+import { validateStringParam, sanitizeUrl } from '../../../../src/utils/validation';
+
 // ========================================================================
 // Types
 // ========================================================================
@@ -1011,23 +1013,47 @@ register(
     if (!apiKey) {
       return { error: 'Web search not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
     }
-    const resp = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: args.query as string,
-        topic: args.topic as string ?? 'news',
-        search_depth: args.search_depth as string ?? 'basic',
-        max_results: 8,
-        time_range: args.time_range as string | undefined,
-        include_domains: args.include_domains as string[] | undefined,
-      }),
-    });
-    if (!resp.ok) {
-      return { error: `Tavily search failed: ${resp.status}` };
+    try {
+      validateStringParam(args.query, 'query', 400);
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : String(err) };
     }
-    return resp.json();
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: args.query as string,
+          topic: args.topic as string ?? 'news',
+          search_depth: args.search_depth as string ?? 'basic',
+          max_results: 8,
+          time_range: args.time_range as string | undefined,
+          include_domains: args.include_domains as string[] | undefined,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily search request failed: ${message}` };
+    }
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily search failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+    let data: unknown;
+    try {
+      data = await resp.json();
+    } catch {
+      return { error: 'Tavily search returned malformed JSON' };
+    }
+    if (data && typeof data === 'object' && 'error' in data) {
+      return { error: `Tavily search error: ${(data as any).error}` };
+    }
+    return data;
   },
 );
 
@@ -1043,25 +1069,46 @@ register(
     if (!apiKey) {
       return { error: 'Web extract not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
     }
-    const urls = (args.urls as string[]).slice(0, 5);
-    const resp = await fetch('https://api.tavily.com/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: apiKey,
-        urls,
-      }),
-    });
-    if (!resp.ok) {
-      return { error: `Tavily extract failed: ${resp.status}` };
+    const rawUrls = (args.urls as string[]).slice(0, 5);
+    const urls = rawUrls.map(u => sanitizeUrl(u)).filter(Boolean);
+    if (urls.length === 0) {
+      return { error: 'No valid URLs provided' };
     }
-    return resp.json();
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ urls }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily extract request failed: ${message}` };
+    }
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily extract failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+    let data: unknown;
+    try {
+      data = await resp.json();
+    } catch {
+      return { error: 'Tavily extract returned malformed JSON' };
+    }
+    if (data && typeof data === 'object' && 'error' in data) {
+      return { error: `Tavily extract error: ${(data as any).error}` };
+    }
+    return data;
   },
 );
 
 register(
   'verify_claim',
-  '验证一条来自社交媒体或其他未经证实来源的声明。搜索公开新闻报道进行交叉验证，返回验证状态（corroborated/unverified/contradicted）和证据。',
+  '验证一条来自社交媒体或其他未经证实来源的声明。搜索公开新闻报道进行交叉验证，返回验证状态（corroborated/unverified）和证据。',
   {
     claim: { type: 'string', description: '要验证的声明内容' },
     source: { type: 'string', description: '声明来源，如 "Twitter @IntelDoge" 或 "Reddit r/geopolitics"' },
@@ -1072,32 +1119,57 @@ register(
     if (!apiKey) {
       return { error: 'Claim verification not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
     }
-    const claim = args.claim as string;
+    let claim: string;
+    try {
+      claim = validateStringParam(args.claim, 'claim', 500);
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
     const source = args.source as string ?? 'unknown';
 
-    const resp = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: claim,
-        topic: 'news',
-        search_depth: 'basic',
-        max_results: 5,
-        time_range: 'week',
-      }),
-    });
-
-    if (!resp.ok) {
-      return { error: `Tavily search failed during verification: ${resp.status}` };
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: claim,
+          topic: 'news',
+          search_depth: 'basic',
+          max_results: 5,
+          time_range: 'week',
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily verify request failed: ${message}` };
     }
 
-    const data = await resp.json() as { results?: Array<{ title: string; url: string; content: string; score: number }> };
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily verify failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+
+    let rawData: unknown;
+    try {
+      rawData = await resp.json();
+    } catch {
+      return { error: 'Tavily verify returned malformed JSON' };
+    }
+    if (rawData && typeof rawData === 'object' && 'error' in rawData) {
+      return { error: `Tavily verify error: ${(rawData as any).error}` };
+    }
+
+    const data = rawData as { results?: Array<{ title: string; url: string; content: string; score: number }> };
     const results = data.results ?? [];
 
     const highRelevance = results.filter((r: any) => r.score > 0.7);
 
-    let status: 'corroborated' | 'unverified' | 'contradicted';
+    let status: 'corroborated' | 'unverified';
     let summary: string;
 
     if (highRelevance.length >= 2) {
@@ -1122,7 +1194,7 @@ register(
       evidence: results.slice(0, 5).map((r: any) => ({
         title: r.title,
         url: r.url,
-        snippet: r.content?.slice(0, 300),
+        snippet: r.content?.slice(0, 300) ?? '(content not available)',
         score: r.score,
       })),
     };

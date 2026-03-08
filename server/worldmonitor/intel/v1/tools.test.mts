@@ -8,6 +8,7 @@ function mockResponse(body: unknown, status = 200): Response {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+    text: async () => JSON.stringify(body),
   } as Response;
 }
 
@@ -222,6 +223,73 @@ describe('verify_claim scoring logic', () => {
   });
 });
 
+describe('verify_claim error handling', () => {
+  let originalKey: string | undefined;
+  let fetchMock: ReturnType<typeof mock.method>;
+
+  beforeEach(() => {
+    originalKey = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = 'test-key';
+    fetchMock = mock.method(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchMock.mock.restore();
+    if (originalKey) {
+      process.env.TAVILY_API_KEY = originalKey;
+    } else {
+      delete process.env.TAVILY_API_KEY;
+    }
+  });
+
+  it('never returns contradicted status', async () => {
+    fetchMock.mock.mockImplementation(async () => mockResponse({
+      results: [
+        { title: 'Contradicting report', url: 'https://reuters.com/1', content: 'This contradicts the claim', score: 0.9 },
+      ],
+    }));
+    const result = await executeToolCall('verify_claim', { claim: 'some claim' }) as any;
+    assert.notStrictEqual(result.status, 'contradicted', 'Should never return contradicted');
+    assert.ok(result.status === 'corroborated' || result.status === 'unverified');
+  });
+
+  it('returns error when fetch throws', async () => {
+    fetchMock.mock.mockImplementation(async () => { throw new Error('Network down'); });
+    const result = await executeToolCall('verify_claim', { claim: 'test claim' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('request failed'), `Expected 'request failed' in: ${result.error}`);
+  });
+
+  it('returns error when response JSON is malformed', async () => {
+    fetchMock.mock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new SyntaxError('Unexpected token'); },
+      text: async () => 'bad json',
+    } as Response));
+    const result = await executeToolCall('verify_claim', { claim: 'test claim' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('malformed JSON'), `Expected 'malformed JSON' in: ${result.error}`);
+  });
+
+  it('returns error when Tavily 200 contains error field', async () => {
+    fetchMock.mock.mockImplementation(async () => mockResponse({ error: 'Rate limit exceeded' }));
+    const result = await executeToolCall('verify_claim', { claim: 'test claim' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('Rate limit exceeded'));
+  });
+
+  it('uses fallback snippet when content is null', async () => {
+    fetchMock.mock.mockImplementation(async () => mockResponse({
+      results: [
+        { title: 'No content article', url: 'https://example.com/1', content: null, score: 0.5 },
+      ],
+    }));
+    const result = await executeToolCall('verify_claim', { claim: 'test with null content' }) as any;
+    assert.strictEqual(result.evidence[0].snippet, '(content not available)');
+  });
+});
+
 // ================================================================
 // Mock-based tests — web_search with fetch mock
 // ================================================================
@@ -248,12 +316,14 @@ describe('web_search with mock fetch', () => {
   it('passes correct parameters to Tavily API', async () => {
     fetchMock.mock.mockImplementation(async (_url: string, init: any) => {
       const body = JSON.parse(init.body);
+      assert.strictEqual(body.api_key, undefined, 'api_key should NOT be in request body');
       assert.strictEqual(body.query, 'Iran conflict');
       assert.strictEqual(body.topic, 'news');
       assert.strictEqual(body.search_depth, 'advanced');
       assert.strictEqual(body.max_results, 8);
       assert.strictEqual(body.time_range, 'week');
       assert.deepStrictEqual(body.include_domains, ['reuters.com']);
+      assert.ok(init.headers['Authorization']?.includes('Bearer'), 'Should use Bearer auth');
       return mockResponse({ results: [] });
     });
 
@@ -280,6 +350,47 @@ describe('web_search with mock fetch', () => {
 
     const result = await executeToolCall('web_search', { query: 'test' }) as any;
     assert.deepStrictEqual(result, expectedBody);
+  });
+
+  it('returns error when fetch throws (network failure)', async () => {
+    fetchMock.mock.mockImplementation(async () => { throw new Error('ECONNREFUSED'); });
+    const result = await executeToolCall('web_search', { query: 'test' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('request failed'), `Expected 'request failed' in: ${result.error}`);
+  });
+
+  it('returns error when response JSON is malformed', async () => {
+    fetchMock.mock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new SyntaxError('Unexpected token'); },
+      text: async () => 'not json',
+    } as Response));
+    const result = await executeToolCall('web_search', { query: 'test' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('malformed JSON'), `Expected 'malformed JSON' in: ${result.error}`);
+  });
+
+  it('returns error when Tavily 200 contains error field', async () => {
+    fetchMock.mock.mockImplementation(async () => mockResponse({ error: 'Invalid API key' }));
+    const result = await executeToolCall('web_search', { query: 'test' }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('Invalid API key'), `Expected 'Invalid API key' in: ${result.error}`);
+  });
+
+  it('returns validation error for empty query', async () => {
+    const result = await executeToolCall('web_search', { query: '' }) as any;
+    assert.ok(result.error);
+  });
+
+  it('sends default topic and search_depth when not specified', async () => {
+    fetchMock.mock.mockImplementation(async (_url: string, init: any) => {
+      const body = JSON.parse(init.body);
+      assert.strictEqual(body.topic, 'news');
+      assert.strictEqual(body.search_depth, 'basic');
+      return mockResponse({ results: [] });
+    });
+    await executeToolCall('web_search', { query: 'test query' });
   });
 });
 
@@ -326,11 +437,33 @@ describe('web_extract with mock fetch', () => {
   });
 
   it('calls Tavily extract endpoint (not search)', async () => {
-    fetchMock.mock.mockImplementation(async (url: string) => {
+    fetchMock.mock.mockImplementation(async (url: string, init: any) => {
       assert.ok((url as string).includes('/extract'), 'Should call /extract endpoint');
+      const body = JSON.parse(init.body);
+      assert.strictEqual(body.api_key, undefined, 'api_key should NOT be in request body');
+      assert.ok(init.headers['Authorization']?.includes('Bearer'), 'Should use Bearer auth');
       return mockResponse({ results: [{ url: 'https://example.com', raw_content: 'Article text' }] });
     });
 
     await executeToolCall('web_extract', { urls: ['https://example.com'] });
+  });
+
+  it('returns error when fetch throws (network failure)', async () => {
+    fetchMock.mock.mockImplementation(async () => { throw new Error('ETIMEDOUT'); });
+    const result = await executeToolCall('web_extract', { urls: ['https://example.com'] }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('request failed'), `Expected 'request failed' in: ${result.error}`);
+  });
+
+  it('returns error when response JSON is malformed', async () => {
+    fetchMock.mock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new SyntaxError('Unexpected token'); },
+      text: async () => 'garbage',
+    } as Response));
+    const result = await executeToolCall('web_extract', { urls: ['https://example.com'] }) as any;
+    assert.ok(result.error);
+    assert.ok(result.error.includes('malformed JSON'), `Expected 'malformed JSON' in: ${result.error}`);
   });
 });

@@ -8,7 +8,7 @@
 
 ## Summary
 
-Add three new tools to the Intelligence Assistant's 75-tool registry, enabling Claude to search the public web, extract full article content, and verify social media claims against authoritative sources.
+Add three new tools to the Intelligence Assistant's 61-tool registry, enabling Claude to search the public web, extract full article content, and verify social media claims against authoritative sources.
 
 ## Motivation
 
@@ -18,7 +18,7 @@ The Intelligence Assistant currently has tools for structured data (ACLED, GDELT
 - No way to verify social media claims against authoritative reporting
 - No way to research topics not covered by existing structured APIs
 
-Tavily fills this gap as the "universal fallback" — when the 75 specialized tools can't find what's needed, Claude can search the public internet.
+Tavily fills this gap as the "universal fallback" — when the 61 specialized tools can't find what's needed, Claude can search the public internet.
 
 ## Design
 
@@ -68,8 +68,8 @@ Input:
   - source (string): Where the claim came from (e.g., "Twitter @IntelDoge")
 
 Output:
-  - status: "corroborated" | "unverified" | "contradicted"
-  - evidence[]: { title, url, snippet, supports_claim: boolean }
+  - status: "corroborated" | "unverified"
+  - evidence[]: { title, url, snippet, score: number }
   - summary: One-line verification conclusion
 
 Internal logic:
@@ -77,7 +77,6 @@ Internal logic:
   2. Call Tavily search (topic: "news", time_range: "week")
   3. Analyze results:
      - Matching reports found + content aligns → "corroborated"
-     - Matching reports found + content conflicts → "contradicted"
      - No relevant reports found → "unverified"
 
 Cost: 1 credit per call
@@ -152,7 +151,7 @@ Free tier supports: ~400 conversations/month or ~300 briefings/month
 ### Graceful Degradation
 
 - `TAVILY_API_KEY` not set → tools return `{ error: "Web search not configured" }`
-- Other 75 tools continue to work normally
+- Other 61 tools continue to work normally
 - Claude will note "web search unavailable" and rely on existing tools
 
 ### Security

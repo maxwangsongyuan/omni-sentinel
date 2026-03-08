@@ -10,6 +10,8 @@
  * SENTINEL: This file is part of the Intelligence Assistant module.
  */
 
+import { validateStringParam, sanitizeUrl } from '../../../../src/utils/validation';
+
 // ========================================================================
 // Types
 // ========================================================================
@@ -988,6 +990,214 @@ register(
       timeframe: args.timeframe as string,
       evidence: args.evidence as string[] ?? [],
     });
+  },
+);
+
+// ========================================================================
+// SENTINEL: Web Search (Tavily)
+// ========================================================================
+
+register(
+  'web_search',
+  '搜索公开互联网获取实时信息（新闻报道、智库分析、政府声明、百科资料等）。当其他专用工具无法覆盖所需信息时使用。',
+  {
+    query: { type: 'string', description: '搜索关键词（英文效果最佳）' },
+    topic: { type: 'string', enum: ['general', 'news'], description: '"news" 搜新闻源，"general" 搜全网' },
+    time_range: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: '时间范围筛选' },
+    include_domains: { type: 'array', items: { type: 'string' }, description: '限定搜索域名列表' },
+    search_depth: { type: 'string', enum: ['basic', 'advanced'], description: '"basic"(1 credit) 或 "advanced"(2 credits)' },
+  },
+  ['query'],
+  async (args) => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      return { error: 'Web search not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
+    }
+    try {
+      validateStringParam(args.query, 'query', 400);
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: args.query as string,
+          topic: args.topic as string ?? 'news',
+          search_depth: args.search_depth as string ?? 'basic',
+          max_results: 8,
+          time_range: args.time_range as string | undefined,
+          include_domains: args.include_domains as string[] | undefined,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily search request failed: ${message}` };
+    }
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily search failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+    let data: unknown;
+    try {
+      data = await resp.json();
+    } catch {
+      return { error: 'Tavily search returned malformed JSON' };
+    }
+    if (data && typeof data === 'object' && 'error' in data) {
+      return { error: `Tavily search error: ${(data as any).error}` };
+    }
+    return data;
+  },
+);
+
+register(
+  'web_extract',
+  '从指定URL提取文章全文内容（Markdown格式）。用于深入阅读 web_search 找到的重要文章。最多5个URL。',
+  {
+    urls: { type: 'array', items: { type: 'string' }, description: '要提取内容的URL列表（最多5个）' },
+  },
+  ['urls'],
+  async (args) => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      return { error: 'Web extract not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
+    }
+    const rawUrls = (args.urls as string[]).slice(0, 5);
+    const urls = rawUrls.map(u => sanitizeUrl(u)).filter(Boolean);
+    if (urls.length === 0) {
+      return { error: 'No valid URLs provided' };
+    }
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ urls }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily extract request failed: ${message}` };
+    }
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily extract failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+    let data: unknown;
+    try {
+      data = await resp.json();
+    } catch {
+      return { error: 'Tavily extract returned malformed JSON' };
+    }
+    if (data && typeof data === 'object' && 'error' in data) {
+      return { error: `Tavily extract error: ${(data as any).error}` };
+    }
+    return data;
+  },
+);
+
+register(
+  'verify_claim',
+  '验证一条来自社交媒体或其他未经证实来源的声明。搜索公开新闻报道进行交叉验证，返回验证状态（corroborated/unverified）和证据。',
+  {
+    claim: { type: 'string', description: '要验证的声明内容' },
+    source: { type: 'string', description: '声明来源，如 "Twitter @IntelDoge" 或 "Reddit r/geopolitics"' },
+  },
+  ['claim'],
+  async (args) => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      return { error: 'Claim verification not configured. Set TAVILY_API_KEY to enable.', status: 'not_configured' };
+    }
+    let claim: string;
+    try {
+      claim = validateStringParam(args.claim, 'claim', 500);
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+    const source = args.source as string ?? 'unknown';
+
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: claim,
+          topic: 'news',
+          search_depth: 'basic',
+          max_results: 5,
+          time_range: 'week',
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `Tavily verify request failed: ${message}` };
+    }
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { error: `Tavily verify failed: ${resp.status} — ${body.slice(0, 200)}` };
+    }
+
+    let rawData: unknown;
+    try {
+      rawData = await resp.json();
+    } catch {
+      return { error: 'Tavily verify returned malformed JSON' };
+    }
+    if (rawData && typeof rawData === 'object' && 'error' in rawData) {
+      return { error: `Tavily verify error: ${(rawData as any).error}` };
+    }
+
+    const data = rawData as { results?: Array<{ title: string; url: string; content: string; score: number }> };
+    const results = data.results ?? [];
+
+    const highRelevance = results.filter((r: any) => r.score > 0.7);
+
+    let status: 'corroborated' | 'unverified';
+    let summary: string;
+
+    if (highRelevance.length >= 2) {
+      status = 'corroborated';
+      summary = `${highRelevance.length} 条权威来源报道与该声明一致`;
+    } else if (highRelevance.length === 1) {
+      status = 'corroborated';
+      summary = `1 条权威来源报道支持该声明: ${highRelevance[0]!.title}`;
+    } else if (results.length > 0) {
+      status = 'unverified';
+      summary = `找到 ${results.length} 条相关结果，但相关度不高，无法确认`;
+    } else {
+      status = 'unverified';
+      summary = '未找到相关权威报道，该声明尚未被公开来源证实';
+    }
+
+    return {
+      status,
+      claim,
+      source,
+      summary,
+      evidence: results.slice(0, 5).map((r: any) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.content?.slice(0, 300) ?? '(content not available)',
+        score: r.score,
+      })),
+    };
   },
 );
 

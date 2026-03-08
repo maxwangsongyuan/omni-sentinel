@@ -15,10 +15,11 @@ export const SENTINEL_FEATURES: RuntimeFeatureDefinition[] = [
   { id: 'trajectoryFlight', name: 'Flight History', description: 'Historical flight tracks from OpenSky.', requiredSecrets: [], fallback: 'Disabled' },
   { id: 'predictionKalshi', name: 'Kalshi Markets', description: 'US-regulated prediction market data.', requiredSecrets: [], fallback: 'Shows only Polymarket' },
   { id: 'predictionMetaculus', name: 'Metaculus Forecasts', description: 'Community forecasting data.', requiredSecrets: [], fallback: 'Shows only Polymarket' },
+  { id: 'webSearch', name: 'Tavily Web Search', description: 'Public internet search, article extraction, and claim verification.', requiredSecrets: ['TAVILY_API_KEY'], fallback: 'Web search tools return not_configured error.' },
 ];
 
 export const SENTINEL_DEFAULT_TOGGLES: Record<string, boolean> = {
   aiClaude: true, socialReddit: true, socialTwitter: true, socialBluesky: true,
   socialYouTube: true, socialTikTok: false, socialVK: false,
-  govdataNotam: true, trajectoryFlight: true, predictionKalshi: true, predictionMetaculus: true,
+  govdataNotam: true, trajectoryFlight: true, predictionKalshi: true, predictionMetaculus: true, webSearch: true,
 };

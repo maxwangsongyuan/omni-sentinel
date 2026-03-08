@@ -1,6 +1,6 @@
 # Omni Sentinel -- Legal & Terms of Service Compliance
 
-**Last Updated:** 2026-03-03
+**Last Updated:** 2026-03-07
 **Status:** Living document -- must be reviewed before each data source integration
 **Scope:** All external data sources, APIs, and AI providers used by Omni Sentinel
 
@@ -40,6 +40,7 @@ This document catalogs the legal posture of every data source in the system. It 
 | **Polymarket** | Gamma API (public, read-only) | Public read access; no authentication required for market data | Trading restricted for US persons (data viewing is global); generous rate limits | LOW |
 | **Kalshi** | Kalshi REST API | CFTC-regulated; public market data accessible | RSA key-pair authentication required; rate limits apply | LOW |
 | **Metaculus** | Metaculus REST API | API access permitted under terms | Prohibits AI/ML training without prior written permission; no automated scraping outside API | MEDIUM |
+| **Tavily** | Tavily Search API (official) | Compliant under standard API terms | 1,000 free credits/month; results are public web content; standard API usage terms apply to search results | LOW |
 | **Anthropic/Claude** | Anthropic API | Compliant under standard API terms | API data retained 30 days (7 days after Sept 2025); not used for training without opt-in; zero-data-retention available | LOW |
 | **OpenRouter** | OpenRouter API | Compliant under standard API terms | Prompts not logged by default; does not control downstream LLM data handling | LOW |
 
@@ -651,6 +652,51 @@ Kalshi is the first federally regulated prediction market in the US:
 - Display Metaculus data with attribution
 - Frame AI integration as "comparison and display" rather than model training
 - Do not store Metaculus data beyond cache TTL
+
+---
+
+### Web Search
+
+---
+
+#### 20a. Tavily
+
+**Risk Level: LOW**
+
+**How We Access Data:**
+[Tavily Search API](https://tavily.com/) for public internet search, article content extraction, and claim verification. Used as a tool within the Intelligence Assistant to search news articles, think tank reports, government statements, and other publicly available web content.
+
+**What the ToS Says:**
+[Tavily Terms of Service](https://tavily.com/terms) and [Privacy Policy](https://tavily.com/privacy):
+- Tavily is an AI-native search engine designed for programmatic use by AI agents and applications
+- Search results are sourced from publicly available web content (no authentication bypass, no paywall circumvention)
+- API usage is metered by credits (1 credit per basic search, 2 per advanced)
+- Free tier: 1,000 credits/month (no credit card required)
+- Results include URLs, titles, content snippets, and relevance scores
+
+**What's Allowed:**
+- Searching public web content and displaying results to users
+- Extracting article content from URLs for analysis
+- Using results as context for AI-powered analysis
+- Caching results for reasonable periods
+
+**What's Prohibited:**
+- Exceeding rate limits or credit quotas
+- Using the API for malicious purposes (spam, phishing, etc.)
+
+**Our Usage:**
+Omni Sentinel uses three Tavily-powered tools:
+1. `web_search` — searches public internet for news, reports, and general information
+2. `web_extract` — extracts full article content from URLs (max 5 per call)
+3. `verify_claim` — cross-verifies social media claims against public news sources
+
+All results are displayed within the Intelligence Assistant chat interface. No bulk storage or redistribution of search results.
+
+**Mitigation:**
+- API key stored server-side only (`process.env.TAVILY_API_KEY`)
+- Graceful degradation: tools return "not configured" when API key is missing
+- Credit usage is minimal (~2 credits per conversation, ~3 per briefing)
+- Free tier supports ~400 conversations/month
 
 ---
 
